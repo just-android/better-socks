@@ -82,3 +82,32 @@ flowchart TB
     SUC --> SUM
     E --> R
 ```
+
+# Address conversion
+
+```mermaid
+flowchart TB
+    subgraph proxy ["ToProxyAddrs — resolve proxy"]
+        sa["SocketAddr / IpAddr,u16 / V4 / V6"]
+        slice["&[SocketAddr]"]
+        host["str / &str,u16"]
+        sa -->|"Once Ready Ok"| once[Once stream]
+        slice -->|"Iter"| pas[ProxyAddrsStream]
+        host -->|"tokio lookup_host"| pas
+        pas -->|"Lookup then Iter / Done"| addrs[SocketAddr]
+    end
+
+    subgraph target ["IntoTargetAddr — SOCKS DST"]
+        ip["SocketAddr family"]
+        pair["&str,u16 / String,u16"]
+        s["&str / String host:port"]
+        ip --> TA_ip[TargetAddr::Ip]
+        pair -->|"parse IpAddr else Domain"| TA
+        s -->|"parse SocketAddr else rsplit :"| TA
+        TA_ip --> TA[TargetAddr]
+        TA -->|"len > 255"| inv[Error::InvalidTargetAddress]
+        TA_ip -->|"try_from"| sock[SocketAddr]
+        TA -->|"Domain try_from"| inv
+        TA -.->|"ToSocketAddrs local DNS"| leak["leaks query; prefer Domain to proxy"]
+    end
+```
