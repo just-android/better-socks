@@ -36,3 +36,8 @@ jobs:
       - name: Clippy
         if: matrix.rust == 'stable'
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Build
+        run: |
+          cargo build --examples --all-features
+          cargo build --verbose --workspace --all-features
