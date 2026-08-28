@@ -26,3 +26,15 @@ use tokio::net::lookup_host;
 pub use error::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// A trait for objects which can be converted or resolved to one or more
+/// `SocketAddr` values, which are going to be connected as the the proxy
+/// server.
+///
+/// This trait is similar to `std::net::ToSocketAddrs` but allows asynchronous
+/// name resolution.
+pub trait ToProxyAddrs {
+    type Output: Stream<Item = Result<SocketAddr>> + Unpin;
+
+    fn to_proxy_addrs(&self) -> Self::Output;
+}
