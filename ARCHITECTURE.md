@@ -41,3 +41,44 @@ flowchart TB
     udp --> udpio
     udp --> tcpio
 ```
+
+# Public types
+
+```mermaid
+flowchart TB
+    subgraph lib_t ["lib.rs"]
+        TPA[ToProxyAddrs]
+        PAS[ProxyAddrsStream]
+        ITA[IntoTargetAddr]
+        TA["TargetAddr Ip / Domain"]
+        Auth["Authentication None / Password"]
+        E[Error]
+        R["Result T"]
+    end
+
+    subgraph tcp_t ["tcp.rs"]
+        SC[SocksConnector]
+        S5S[Socks5Stream S]
+        S5L[Socks5Listener S]
+        Cmd["Command Connect Bind Associate TorResolve TorResolvePtr"]
+    end
+
+    subgraph udp_t ["udp.rs"]
+        SUF[Socks5UdpFramed]
+        SUC[Socks5UdpCodec]
+        SUM[Socks5UdpMessage]
+    end
+
+    TPA --> PAS
+    ITA --> TA
+    TPA --> SC
+    ITA --> SC
+    Auth --> SC
+    Cmd --> SC
+    SC --> S5S
+    S5S --> S5L
+    S5S --> SUF
+    SUC --> SUF
+    SUC --> SUM
+    E --> R
+```
