@@ -680,3 +680,91 @@ impl Socks5Listener<TcpStream> {
         Ok(Socks5Listener { inner: socket })
     }
 }
+
+impl<S> Socks5Listener<S>
+where S: AsyncRead + AsyncWrite + Unpin
+{
+    /// Initiates a BIND request to the specified proxy using the given socket
+    /// to it.
+    ///
+    /// The proxy will filter incoming connections based on the value of
+    /// `target`.
+    ///
+    /// # Error
+    ///
+    /// It propagates the error that occurs in the conversion from `T` to
+    /// `TargetAddr`.
+    pub async fn bind_with_socket<'t, T>(socket: S, target: T) -> Result<Socks5Listener<S>>
+    where T: IntoTargetAddr<'t> {
+        Self::bind_with_auth_and_socket(Authentication::None, socket, target).await
+    }
+
+    /// Initiates a BIND request to the specified proxy using given username,
+    /// password and socket to the proxy.
+    ///
+    /// The proxy will filter incoming connections based on the value of
+    /// `target`.
+    ///
+    /// # Error
+    ///
+    /// It propagates the error that occurs in the conversion from `T` to
+    /// `TargetAddr`.
+    pub async fn bind_with_password_and_socket<'a, 't, T>(
+        socket: S,
+        target: T,
+        username: &'a str,
+        password: &'a str,
+    ) -> Result<Socks5Listener<S>>
+    where
+        T: IntoTargetAddr<'t>,
+    {
+        Self::bind_with_auth_and_socket(Authentication::Password { username, password }, socket, target).await
+    }
+
+    async fn bind_with_auth_and_socket<'t, T>(
+        auth: Authentication<'_>,
+        socket: S,
+        target: T,
+    ) -> Result<Socks5Listener<S>>
+    where
+        T: IntoTargetAddr<'t>,
+    {
+        let socket = SocksConnector::new(auth, Command::Bind, stream::empty().fuse(), target.into_target_addr()?)
+            .execute_with_socket(socket)
+            .await?;
+
+        Ok(Socks5Listener { inner: socket })
+    }
+
+    /// Returns the address of the proxy-side TCP listener.
+    ///
+    /// This should be forwarded to the remote process, which should open a
+    /// connection to it.
+    pub fn bind_addr(&self) -> TargetAddr<'_> {
+        self.inner.target_addr()
+    }
+
+    /// Consumes this listener, returning a `Future` which resolves to the
+    /// `Socks5Stream` connected to the target server through the proxy.
+    ///
+    /// The value of `bind_addr` should be forwarded to the remote process
+    /// before this method is called.
+    pub async fn accept(mut self) -> Result<Socks5Stream<S>> {
+        let mut connector = SocksConnector {
+            auth: Authentication::None,
+            command: Command::Bind,
+            proxy: stream::empty().fuse(),
+            target: self.inner.target,
+            buf: [0; 513],
+            ptr: 0,
+            len: 0,
+        };
+
+        let target = connector.receive_reply(&mut self.inner.socket).await?;
+
+        Ok(Socks5Stream {
+            socket: self.inner.socket,
+            target,
+        })
+    }
+}
