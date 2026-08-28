@@ -533,3 +533,77 @@ where S: Stream<Item = Result<SocketAddr>> + Unpin
 
         Ok(())
     }
+
+    async fn receive_reply<T: AsyncRead + AsyncWrite + Unpin>(&mut self, tcp: &mut T) -> Result<TargetAddr<'static>> {
+        self.prepare_recv_reply();
+        self.ptr += tcp.read_exact(&mut self.buf[self.ptr..self.len]).await?;
+        if self.buf[0] != 0x05 {
+            return Err(Error::InvalidResponseVersion);
+        }
+        if self.buf[2] != 0x00 {
+            return Err(Error::InvalidReservedByte);
+        }
+
+        match self.buf[1] {
+            0x00 => {}, // succeeded
+            0x01 => return Err(Error::GeneralSocksServerFailure),
+            0x02 => return Err(Error::ConnectionNotAllowedByRuleset),
+            0x03 => return Err(Error::NetworkUnreachable),
+            0x04 => return Err(Error::HostUnreachable),
+            0x05 => return Err(Error::ConnectionRefused),
+            0x06 => return Err(Error::TtlExpired),
+            0x07 => return Err(Error::CommandNotSupported),
+            0x08 => return Err(Error::AddressTypeNotSupported),
+            _ => return Err(Error::UnknownError),
+        }
+
+        match self.buf[3] {
+            // IPv4
+            0x01 => {
+                self.len = 10;
+            },
+            // IPv6
+            0x04 => {
+                self.len = 22;
+            },
+            // Domain
+            0x03 => {
+                self.len = 5;
+                self.ptr += tcp.read_exact(&mut self.buf[self.ptr..self.len]).await?;
+                self.len += self.buf[4] as usize + 2;
+            },
+            _ => Err(Error::UnknownAddressType)?,
+        }
+
+        self.ptr += tcp.read_exact(&mut self.buf[self.ptr..self.len]).await?;
+        let target: TargetAddr<'static> = match self.buf[3] {
+            // IPv4
+            0x01 => {
+                let mut ip = [0; 4];
+                ip[..].copy_from_slice(&self.buf[4..8]);
+                let ip = Ipv4Addr::from(ip);
+                let port = u16::from_be_bytes([self.buf[8], self.buf[9]]);
+                (ip, port).into_target_addr()?
+            },
+            // IPv6
+            0x04 => {
+                let mut ip = [0; 16];
+                ip[..].copy_from_slice(&self.buf[4..20]);
+                let ip = Ipv6Addr::from(ip);
+                let port = u16::from_be_bytes([self.buf[20], self.buf[21]]);
+                (ip, port).into_target_addr()?
+            },
+            // Domain
+            0x03 => {
+                let domain_bytes = self.buf[5..(self.len - 2)].to_vec();
+                let domain = String::from_utf8(domain_bytes)
+                    .map_err(|_| Error::InvalidTargetAddress("not a valid UTF-8 string"))?;
+                let port = u16::from_be_bytes([self.buf[self.len - 2], self.buf[self.len - 1]]);
+                TargetAddr::Domain(domain.into(), port)
+            },
+            _ => unreachable!(),
+        };
+
+        Ok(target)
+    }
+}
