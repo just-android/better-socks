@@ -236,3 +236,40 @@ flowchart TB
         udp_in --> dec[decode Socks5UdpMessage]
     end
 ```
+
+# UDP codec
+
+```mermaid
+flowchart LR
+    subgraph pkt ["RFC 1928 UDP request"]
+        rsv["RSV 2"]
+        frag["FRAG 1"]
+        atyp["ATYP"]
+        dst["DST.ADDR + PORT"]
+        data[DATA]
+    end
+
+    subgraph enc ["Encoder Bytes, TargetAddr"]
+        e4["ATYP 1 IPv4"]
+        e6["ATYP 4 IPv6"]
+        ed["ATYP 3 domain"]
+        ed -->|"len > 255"| ol[Error::InvalidTargetAddress]
+    end
+
+    subgraph dec ["Decoder"]
+        dshort["len < 4 truncated"]
+        drsv["RSV != 0 InvalidReservedByte"]
+        dfrag["FRAG != 0 FragmentationNotSupported"]
+        datyp["ATYP 1 / 4 / 3"]
+        dunk["unknown ATYP"]
+    end
+
+    rsv --> enc
+    frag --> enc
+    atyp --> enc
+    dst --> enc
+    data --> enc
+    rsv --> dec
+    frag --> dec
+    atyp --> dec
+```
