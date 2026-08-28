@@ -328,3 +328,84 @@ where S: AsyncRead + AsyncWrite + Unpin
         }
     }
 }
+
+/// A `Future` which resolves to a socket to the target server through proxy.
+pub struct SocksConnector<'a, 't, S> {
+    auth: Authentication<'a>,
+    command: Command,
+    proxy: Fuse<S>,
+    target: TargetAddr<'t>,
+    buf: [u8; 513],
+    ptr: usize,
+    len: usize,
+}
+
+impl<'a, 't, S> SocksConnector<'a, 't, S>
+where S: Stream<Item = Result<SocketAddr>> + Unpin
+{
+    fn new(auth: Authentication<'a>, command: Command, proxy: Fuse<S>, target: TargetAddr<'t>) -> Self {
+        SocksConnector {
+            auth,
+            command,
+            proxy,
+            target,
+            buf: [0; 513],
+            ptr: 0,
+            len: 0,
+        }
+    }
+
+    /// Connect to the proxy server, authenticate and issue the SOCKS command.
+    ///
+    /// Every address yielded by [`ToProxyAddrs`] is tried in order until a TCP
+    /// connection succeeds. The last I/O error is returned if all addresses
+    /// fail; [`Error::ProxyServerUnreachable`] is used when the address stream
+    /// is empty.
+    ///
+    /// After a successful CONNECT/BIND/ASSOCIATE, some public proxies report a
+    /// private IPv4 bind address even though the client is not on that LAN. In
+    /// that case the reported IPv4 is rewritten to the proxy's public address
+    /// so later UDP/BIND traffic is sent to a reachable host. The rewrite is
+    /// not applied when connecting through a pre-opened socket.
+    pub async fn execute(&mut self) -> Result<Socks5Stream<TcpStream>> {
+        let mut last_err: Option<Error> = None;
+        while let Some(item) = self.proxy.next().await {
+            let next_addr = match item {
+                Ok(addr) => addr,
+                Err(e) => {
+                    last_err = Some(e);
+                    continue;
+                },
+            };
+            match TcpStream::connect(next_addr).await {
+                Ok(tcp) => {
+                    let mut stream = self.execute_with_socket(tcp).await?;
+                    if let TargetAddr::Ip(SocketAddr::V4(target_addr)) = &mut stream.target
+                        && let SocketAddr::V4(proxy_addr) = next_addr
+                        && target_addr.ip().is_private()
+                        && !proxy_addr.ip().is_private()
+                    {
+                        target_addr.set_ip(*proxy_addr.ip());
+                    }
+                    return Ok(stream);
+                },
+                Err(e) => last_err = Some(e.into()),
+            }
+        }
+        Err(last_err.unwrap_or(Error::ProxyServerUnreachable))
+    }
+
+    pub async fn execute_with_socket<T: AsyncRead + AsyncWrite + Unpin>(
+        &mut self,
+        mut socket: T,
+    ) -> Result<Socks5Stream<T>> {
+        self.authenticate(&mut socket).await?;
+
+        // Send request address that should be proxied
+        self.prepare_send_request();
+        socket.write_all(&self.buf[self.ptr..self.len]).await?;
+
+        let target = self.receive_reply(&mut socket).await?;
+
+        Ok(Socks5Stream { socket, target })
+    }
