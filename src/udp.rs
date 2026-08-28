@@ -308,3 +308,50 @@ impl Encoder<(Bytes, TargetAddr<'static>)> for Socks5UdpCodec {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{Ipv4Addr, SocketAddrV6};
+
+    fn roundtrip(addr: TargetAddr<'static>, payload: &[u8]) -> Socks5UdpMessage {
+        let mut codec = Socks5UdpCodec::new();
+        let mut buf = BytesMut::new();
+        codec
+            .encode((Bytes::copy_from_slice(payload), addr), &mut buf)
+            .expect("encode");
+        codec.decode(&mut buf).expect("decode").expect("frame")
+    }
+
+    #[test]
+    fn roundtrip_ipv4() {
+        let addr = TargetAddr::Ip(SocketAddr::from((Ipv4Addr::new(1, 2, 3, 4), 9050)));
+        let msg = roundtrip(addr.clone(), b"hello");
+        assert_eq!(msg.atyp, 0x01);
+        assert_eq!(msg.frag, 0);
+        assert_eq!(msg.dst_addr, addr);
+        assert_eq!(&msg.data[..], b"hello");
+    }
+
+    #[test]
+    fn roundtrip_ipv6() {
+        let addr = TargetAddr::Ip(SocketAddr::V6(SocketAddrV6::new(
+            Ipv6Addr::LOCALHOST,
+            1080,
+            0,
+            0,
+        )));
+        let msg = roundtrip(addr.clone(), b"v6");
+        assert_eq!(msg.atyp, 0x04);
+        assert_eq!(msg.dst_addr, addr);
+        assert_eq!(&msg.data[..], b"v6");
+    }
+
+    #[test]
+    fn roundtrip_domain() {
+        let addr = TargetAddr::Domain("example.com".into(), 80);
+        let msg = roundtrip(addr.clone(), b"hi");
+        assert_eq!(msg.atyp, 0x03);
+        assert_eq!(msg.dst_addr, addr);
+        assert_eq!(&msg.data[..], b"hi");
+    }
