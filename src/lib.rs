@@ -65,3 +65,30 @@ impl ToProxyAddrs for &[SocketAddr] {
         ProxyAddrsStream::from_addrs(self.to_vec())
     }
 }
+
+impl ToProxyAddrs for str {
+    type Output = ProxyAddrsStream;
+
+    fn to_proxy_addrs(&self) -> Self::Output {
+        let host = self.to_owned();
+        ProxyAddrsStream::lookup(async move { Ok(lookup_host(host).await?.collect()) })
+    }
+}
+
+impl ToProxyAddrs for (&str, u16) {
+    type Output = ProxyAddrsStream;
+
+    fn to_proxy_addrs(&self) -> Self::Output {
+        let host = self.0.to_owned();
+        let port = self.1;
+        ProxyAddrsStream::lookup(async move { Ok(lookup_host((host, port)).await?.collect()) })
+    }
+}
+
+impl<T: ToProxyAddrs + ?Sized> ToProxyAddrs for &T {
+    type Output = T::Output;
+
+    fn to_proxy_addrs(&self) -> Self::Output {
+        (**self).to_proxy_addrs()
+    }
+}
