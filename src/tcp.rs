@@ -25,3 +25,26 @@ enum Command {
     #[cfg(feature = "tor")]
     TorResolvePtr = 0xF1,
 }
+
+/// A SOCKS5 client.
+///
+/// For convenience, it can be dereferenced to it's inner socket.
+#[derive(Debug)]
+pub struct Socks5Stream<S> {
+    socket: S,
+    target: TargetAddr<'static>,
+}
+
+impl<S> Deref for Socks5Stream<S> {
+    type Target = S;
+
+    fn deref(&self) -> &Self::Target {
+        &self.socket
+    }
+}
+
+impl<S> DerefMut for Socks5Stream<S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.socket
+    }
+}
