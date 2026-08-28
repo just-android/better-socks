@@ -111,3 +111,31 @@ flowchart TB
         TA -.->|"ToSocketAddrs local DNS"| leak["leaks query; prefer Domain to proxy"]
     end
 ```
+
+# CONNECT lifecycle
+
+```mermaid
+flowchart LR
+    P[P: ToProxyAddrs] --> fuse["to_proxy_addrs fuse"]
+    T[T: IntoTargetAddr] --> tgt[TargetAddr]
+    auth{"password?"}
+    auth -->|no| none[Authentication::None]
+    auth -->|yes| pw[Authentication::Password]
+    none --> val[validate_auth]
+    pw --> val
+    val -->|len > 255| iae[Error::InvalidAuthValues]
+    fuse --> SC[SocksConnector]
+    tgt --> SC
+    val --> SC
+    SC --> exec{"socket given?"}
+    exec -->|no| loop["TcpStream::connect each addr"]
+    exec -->|yes| sock[execute_with_socket]
+    loop -->|all fail| last["last Io / ProxyServerUnreachable"]
+    loop -->|ok| sock
+    sock --> hs[authenticate]
+    hs --> req[prepare_send_request]
+    req --> reply[receive_reply]
+    reply --> rewrite["rewrite private IPv4 bind if public proxy"]
+    rewrite --> S5S[Socks5Stream]
+    S5S --> io["AsyncRead / AsyncWrite passthrough"]
+```
