@@ -44,3 +44,14 @@ jobs:
 
       - name: Unit tests
         run: cargo test --lib --verbose --all-features
+
+      - name: Install 3proxy and socat
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y socat
+          curl -sSL -o "${RUNNER_TEMP}/3proxy.tar.gz" \
+            https://github.com/3proxy/3proxy/archive/refs/tags/0.8.13.tar.gz
+          tar -C "${RUNNER_TEMP}" -xzf "${RUNNER_TEMP}/3proxy.tar.gz"
+          ln -s Makefile.Linux "${RUNNER_TEMP}/3proxy-0.8.13/Makefile"
+          make -C "${RUNNER_TEMP}/3proxy-0.8.13" -j"$(nproc)"
+          echo "${RUNNER_TEMP}/3proxy-0.8.13/src" >> "$GITHUB_PATH"
