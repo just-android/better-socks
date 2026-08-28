@@ -11,3 +11,6 @@ pub enum Error {
     /// message.
     #[error("Target address is invalid: {0}")]
     InvalidTargetAddress(&'static str),
+    /// Proxy server unreachable.
+    #[error("Proxy server unreachable")]
+    ProxyServerUnreachable,
