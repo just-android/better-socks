@@ -208,3 +208,32 @@ impl ToSocketAddrs for TargetAddr<'_> {
         })
     }
 }
+
+/// A trait for objects that can be converted to `TargetAddr`.
+pub trait IntoTargetAddr<'a> {
+    /// Converts the value of self to a `TargetAddr`.
+    fn into_target_addr(self) -> Result<TargetAddr<'a>>;
+}
+
+macro_rules! trivial_impl_into_target_addr {
+    ($t: ty) => {
+        impl<'a> IntoTargetAddr<'a> for $t {
+            fn into_target_addr(self) -> Result<TargetAddr<'a>> {
+                Ok(TargetAddr::Ip(SocketAddr::from(self)))
+            }
+        }
+    };
+}
+
+trivial_impl_into_target_addr!(SocketAddr);
+trivial_impl_into_target_addr!((IpAddr, u16));
+trivial_impl_into_target_addr!((Ipv4Addr, u16));
+trivial_impl_into_target_addr!((Ipv6Addr, u16));
+trivial_impl_into_target_addr!(SocketAddrV4);
+trivial_impl_into_target_addr!(SocketAddrV6);
+
+impl<'a> IntoTargetAddr<'a> for TargetAddr<'a> {
+    fn into_target_addr(self) -> Result<TargetAddr<'a>> {
+        Ok(self)
+    }
+}
