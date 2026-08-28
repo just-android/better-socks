@@ -59,3 +59,13 @@ pub enum Error {
     /// Unknown address type
     #[error("Unknown address type")]
     UnknownAddressType,
+    /// Invalid authentication values. It contains the detailed error message.
+    #[error("Invalid auth values: {0}")]
+    InvalidAuthValues(&'static str),
+    /// Password auth failure
+    #[error("Password auth failure, code: {0}")]
+    PasswordAuthFailure(u8),
+
+    #[error("Authorization required")]
+    AuthorizationRequired,
+}
