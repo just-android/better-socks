@@ -139,3 +139,55 @@ flowchart LR
     rewrite --> S5S[Socks5Stream]
     S5S --> io["AsyncRead / AsyncWrite passthrough"]
 ```
+
+# Handshake and request
+
+```mermaid
+flowchart TB
+    subgraph method ["method selection RFC 1928"]
+        sendm["VER 5, NMETHODS, METHODS"]
+        recvm["VER, METHOD"]
+        sendm --> recvm
+        recvm -->|0x00| noauth[no auth]
+        recvm -->|0x02| rfc1929[RFC 1929]
+        recvm -->|0xff| na[Error::NoAcceptableAuthMethods]
+        recvm -->|other| ua[Error::UnknownAuthMethod]
+        recvm -->|"VER != 5"| irv[Error::InvalidResponseVersion]
+    end
+
+    subgraph pass ["username/password RFC 1929"]
+        sendp["VER 1, ULEN, UNAME, PLEN, PASSWD"]
+        recvp["VER 1, STATUS"]
+        sendp --> recvp
+        recvp -->|"STATUS != 0"| paf[Error::PasswordAuthFailure]
+        recvp -->|"VER != 1"| irv
+        none_auth["Authentication::None + METHOD 0x02"] --> ar[Error::AuthorizationRequired]
+    end
+
+    subgraph req ["request"]
+        hdr["VER 5, CMD, RSV 0, ATYP"]
+        a1["ATYP 1 IPv4 + port"]
+        a4["ATYP 4 IPv6 + port"]
+        a3["ATYP 3 domain + port"]
+        hdr --> a1
+        hdr --> a4
+        hdr --> a3
+    end
+
+    subgraph reply ["reply"]
+        rh["VER 5, REP, RSV, ATYP + BND"]
+        rh -->|REP 0x00| ok[TargetAddr from BND]
+        rh -->|0x01..0x08| socks_err["GeneralSocksServerFailure .. AddressTypeNotSupported"]
+        rh -->|other REP| unk[Error::UnknownError]
+        rh -->|"RSV != 0"| irb[Error::InvalidReservedByte]
+        rh -->|"ATYP unknown"| uat[Error::UnknownAddressType]
+    end
+
+    recvm --> rfc1929
+    rfc1929 --> sendp
+    noauth --> hdr
+    recvp --> hdr
+    a1 --> rh
+    a4 --> rh
+    a3 --> rh
+```
