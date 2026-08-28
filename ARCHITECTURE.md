@@ -191,3 +191,17 @@ flowchart TB
     a4 --> rh
     a3 --> rh
 ```
+
+# BIND lifecycle
+
+```mermaid
+flowchart LR
+    bind["Socks5Listener::bind / bind_with_socket"] --> cmd[Command::Bind]
+    cmd --> SC[SocksConnector execute]
+    SC --> L[Socks5Listener]
+    L --> ba["bind_addr = first BND"]
+    ba --> fwd["forward bind_addr to peer"]
+    fwd --> acc["accept"]
+    acc --> r2["receive_reply second BND"]
+    r2 --> S5S["Socks5Stream peer via proxy"]
+```
