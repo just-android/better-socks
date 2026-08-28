@@ -273,3 +273,17 @@ flowchart LR
     frag --> dec
     atyp --> dec
 ```
+
+# Private IPv4 rewrite
+
+```mermaid
+flowchart TB
+    exec["SocksConnector::execute after CONNECT"]
+    exec --> chk{"BND is IPv4 private AND proxy addr is public V4?"}
+    chk -->|yes| rw["replace BND IP with proxy public IP"]
+    chk -->|no| keep[keep BND]
+    sock["execute_with_socket"] -.->|"no rewrite"| keep
+```
+
+Applied so UDP ASSOCIATE / BIND traffic is sent to a reachable host when a
+public proxy reports a LAN bind address. Pre-opened sockets skip the rewrite.
