@@ -7,3 +7,7 @@ pub enum Error {
     /// Failure when parsing a `String`.
     #[error("{0}")]
     ParseError(#[from] std::string::ParseError),
+    /// Failure due to invalid target address. It contains the detailed error
+    /// message.
+    #[error("Target address is invalid: {0}")]
+    InvalidTargetAddress(&'static str),
