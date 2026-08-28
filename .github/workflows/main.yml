@@ -16,3 +16,23 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test (${{ matrix.rust }})
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, beta, nightly]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        if: matrix.rust == 'stable'
+        run: cargo clippy --all-targets --all-features -- -D warnings
