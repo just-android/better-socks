@@ -183,3 +183,79 @@ impl Socks5UdpMessage {
         }
     }
 }
+
+// +----+------+------+----------+----------+----------+
+// |RSV | FRAG | ATYP | DST.ADDR | DST.PORT |   DATA   |
+// +----+------+------+----------+----------+----------+
+// | 2  |  1   |  1   | Variable |    2     | Variable |
+// +----+------+------+----------+----------+----------+
+impl Decoder for Socks5UdpCodec {
+    type Error = Error;
+    type Item = Socks5UdpMessage;
+
+    fn decode(&mut self, buf: &mut BytesMut) -> StdResult<Option<Self::Item>, Self::Error> {
+        if buf.is_empty() {
+            return Ok(None);
+        }
+
+        // RSV(2) + FRAG(1) + ATYP(1). UdpFramed delivers a whole datagram, so a
+        // short buffer is a truncated packet rather than a partial frame.
+        if buf.len() < 4 {
+            return Err(Error::InvalidTargetAddress("UDP datagram shorter than SOCKS5 header"));
+        }
+
+        let mut msg = Socks5UdpMessage::new();
+        msg.rsv.copy_from_slice(&buf[0..2]);
+        if msg.rsv != [0u8, 0u8] {
+            return Err(Error::InvalidReservedByte);
+        }
+
+        msg.frag = buf[2];
+        if msg.frag != 0 {
+            return Err(Error::FragmentationNotSupported);
+        }
+        msg.atyp = buf[3];
+
+        let header_len = match msg.atyp {
+            0x01 => {
+                if buf.len() < 10 {
+                    return Err(Error::InvalidTargetAddress("truncated IPv4 UDP datagram"));
+                }
+                let ip = Ipv4Addr::new(buf[4], buf[5], buf[6], buf[7]);
+                let port = u16::from_be_bytes([buf[8], buf[9]]);
+                msg.dst_addr = TargetAddr::Ip(SocketAddr::from((ip, port)));
+                10
+            },
+            0x04 => {
+                if buf.len() < 22 {
+                    return Err(Error::InvalidTargetAddress("truncated IPv6 UDP datagram"));
+                }
+                let mut octets = [0u8; 16];
+                octets.copy_from_slice(&buf[4..20]);
+                let port = u16::from_be_bytes([buf[20], buf[21]]);
+                msg.dst_addr = TargetAddr::Ip(SocketAddr::from((Ipv6Addr::from(octets), port)));
+                22
+            },
+            0x03 => {
+                if buf.len() < 5 {
+                    return Err(Error::InvalidTargetAddress("truncated domain UDP datagram"));
+                }
+                let len = buf[4] as usize;
+                let header_len = 5 + len + 2;
+                if buf.len() < header_len {
+                    return Err(Error::InvalidTargetAddress("truncated domain UDP datagram"));
+                }
+                let domain = String::from_utf8(buf[5..5 + len].to_vec())
+                    .map_err(|_| Error::InvalidTargetAddress("not a valid UTF-8 string"))?;
+                let port = u16::from_be_bytes([buf[5 + len], buf[5 + len + 1]]);
+                msg.dst_addr = TargetAddr::Domain(domain.into(), port);
+                header_len
+            },
+            _ => return Err(Error::UnknownAddressType),
+        };
+
+        msg.data = buf.split_off(header_len);
+        buf.clear();
+        Ok(Some(msg))
+    }
+}
