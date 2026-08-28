@@ -485,3 +485,51 @@ where S: Stream<Item = Result<SocketAddr>> + Unpin
         self.ptr = 0;
         self.len = 4;
     }
+
+    async fn password_authentication_protocol<T: AsyncRead + AsyncWrite + Unpin>(&mut self, tcp: &mut T) -> Result<()> {
+        if let Authentication::None = self.auth {
+            return Err(Error::AuthorizationRequired);
+        }
+
+        self.prepare_send_password_auth();
+        tcp.write_all(&self.buf[self.ptr..self.len]).await?;
+
+        self.prepare_recv_password_auth();
+        tcp.read_exact(&mut self.buf[self.ptr..self.len]).await?;
+
+        if self.buf[0] != 0x01 {
+            return Err(Error::InvalidResponseVersion);
+        }
+        if self.buf[1] != 0x00 {
+            return Err(Error::PasswordAuthFailure(self.buf[1]));
+        }
+
+        Ok(())
+    }
+
+    async fn authenticate<T: AsyncRead + AsyncWrite + Unpin>(&mut self, tcp: &mut T) -> Result<()> {
+        // Write request to connect/authenticate
+        self.prepare_send_method_selection();
+        tcp.write_all(&self.buf[self.ptr..self.len]).await?;
+
+        // Receive authentication method
+        self.prepare_recv_method_selection();
+        tcp.read_exact(&mut self.buf[self.ptr..self.len]).await?;
+        if self.buf[0] != 0x05 {
+            return Err(Error::InvalidResponseVersion);
+        }
+        match self.buf[1] {
+            0x00 => {
+                // No auth
+            },
+            0x02 => {
+                self.password_authentication_protocol(tcp).await?;
+            },
+            0xff => {
+                return Err(Error::NoAcceptableAuthMethods);
+            },
+            _ => return Err(Error::UnknownAuthMethod),
+        }
+
+        Ok(())
+    }
