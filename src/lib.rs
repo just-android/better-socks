@@ -461,3 +461,28 @@ mod tests {
         let addr = "www.example.com:65536";
         assert!(into_target_addr(addr).is_err());
     }
+
+    #[test]
+    fn target_addr_to_string() {
+        let domain = "www.example.com:80";
+        let res = into_target_addr(domain).unwrap().to_string();
+        assert_eq!(domain, res.as_str());
+
+        let domain = "0.0.0.0:80";
+        let res = into_target_addr(domain).unwrap().to_string();
+        assert_eq!(domain, res.as_str());
+    }
+
+    #[test]
+    fn target_addr_set_port() {
+        let domain = "www.example.com:80";
+        let mut res = into_target_addr(domain).unwrap();
+        let port = 16u16;
+        res.set_port(16u16);
+        assert_eq!(port, res.port());
+
+        let domain = "0.0.0.0:80";
+        let mut res = into_target_addr(domain).unwrap();
+        res.set_port(16u16);
+        assert_eq!(port, res.port());
+    }
