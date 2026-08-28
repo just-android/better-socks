@@ -287,3 +287,50 @@ flowchart TB
 
 Applied so UDP ASSOCIATE / BIND traffic is sent to a reachable host when a
 public proxy reports a LAN bind address. Pre-opened sockets skip the rewrite.
+
+# Command map
+
+```mermaid
+flowchart LR
+    subgraph api ["public entry"]
+        c["Socks5Stream::connect"]
+        cp["connect_with_password"]
+        cs["connect_with_socket"]
+        a["associate"]
+        ap["associate_with_password"]
+        b["Socks5Listener::bind"]
+        tr["tor_resolve"]
+        tp["tor_resolve_ptr"]
+        uf["Socks5UdpFramed::connect"]
+    end
+
+    subgraph cmd ["Command"]
+        C[Connect 0x01]
+        B[Bind 0x02]
+        A[Associate 0x03]
+        TR["TorResolve 0xF0"]
+        TPTR["TorResolvePtr 0xF1"]
+    end
+
+    c --> C
+    cp --> C
+    cs --> C
+    a --> A
+    ap --> A
+    uf --> a
+    b --> B
+    tr --> TR
+    tp --> TPTR
+```
+
+# Chain proxy
+
+```mermaid
+flowchart LR
+    t0["TcpStream::connect proxy0"] --> s1["connect_with_socket proxy1"]
+    s1 --> s2["connect_with_socket dest"]
+    s2 --> bytes["AsyncRead / AsyncWrite nested Socks5Stream"]
+```
+
+Inner `Socks5Stream` is `AsyncRead + AsyncWrite`, so it is a valid socket for
+the next hop. Tor Unix sockets use the same `*_with_socket` path.
