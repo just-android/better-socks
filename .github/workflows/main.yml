@@ -41,3 +41,6 @@ jobs:
         run: |
           cargo build --examples --all-features
           cargo build --verbose --workspace --all-features
+
+      - name: Unit tests
+        run: cargo test --lib --verbose --all-features
