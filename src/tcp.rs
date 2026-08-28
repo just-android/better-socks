@@ -452,3 +452,36 @@ where S: Stream<Item = Result<SocketAddr>> + Unpin
         self.ptr = 0;
         self.len = 2;
     }
+
+    fn prepare_send_request(&mut self) {
+        self.ptr = 0;
+        self.buf[..3].copy_from_slice(&[0x05, self.command as u8, 0x00]);
+        match &self.target {
+            TargetAddr::Ip(SocketAddr::V4(addr)) => {
+                self.buf[3] = 0x01;
+                self.buf[4..8].copy_from_slice(&addr.ip().octets());
+                self.buf[8..10].copy_from_slice(&addr.port().to_be_bytes());
+                self.len = 10;
+            },
+            TargetAddr::Ip(SocketAddr::V6(addr)) => {
+                self.buf[3] = 0x04;
+                self.buf[4..20].copy_from_slice(&addr.ip().octets());
+                self.buf[20..22].copy_from_slice(&addr.port().to_be_bytes());
+                self.len = 22;
+            },
+            TargetAddr::Domain(domain, port) => {
+                self.buf[3] = 0x03;
+                let domain = domain.as_bytes();
+                let len = domain.len();
+                self.buf[4] = len as u8;
+                self.buf[5..5 + len].copy_from_slice(domain);
+                self.buf[(5 + len)..(7 + len)].copy_from_slice(&port.to_be_bytes());
+                self.len = 7 + len;
+            },
+        }
+    }
+
+    fn prepare_recv_reply(&mut self) {
+        self.ptr = 0;
+        self.len = 4;
+    }
