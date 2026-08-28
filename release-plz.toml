@@ -1,9 +1,10 @@
-# Version from git tags, not crates.io. Flip these when you are ready to
-# `cargo publish`: git_only = false, publish = true, semver_check = true.
+# crates.io trusted publishing (OIDC). Crate is trustpub_only — do not set
+# CARGO_REGISTRY_TOKEN. On crates.io: Settings → Trusted Publishing →
+# GitHub Actions, owner just-android, repo better-socks, workflow release-plz.yml.
 [workspace]
-git_only = true
-publish = false
+git_only = false
+publish = true
 release_always = false
-semver_check = false
+semver_check = true
 git_tag_name = "v{{ version }}"
 pr_labels = ["release"]

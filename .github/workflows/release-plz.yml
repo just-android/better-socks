@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  # Tag and GitHub Release after the release PR is merged.
+  # Tag, GitHub Release, and cargo publish after the release PR is merged.
   release-plz-release:
     name: Release-plz release
     if: github.repository_owner == 'just-android'
@@ -17,6 +17,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
