@@ -159,3 +159,27 @@ fn relay_socket_addr(addr: TargetAddr<'_>) -> Result<SocketAddr> {
         )),
     }
 }
+
+impl Socks5UdpCodec {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Default for Socks5UdpMessage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Socks5UdpMessage {
+    pub fn new() -> Self {
+        Self {
+            rsv: [0u8; 2],
+            frag: 0u8,
+            atyp: 0u8,
+            dst_addr: TargetAddr::Ip(SocketAddr::from(([0, 0, 0, 0], 0))),
+            data: BytesMut::new(),
+        }
+    }
+}
