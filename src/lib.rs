@@ -157,3 +157,16 @@ pub enum TargetAddr<'a> {
     /// will happen there.
     Domain(Cow<'a, str>, u16),
 }
+
+impl TryFrom<TargetAddr<'_>> for SocketAddr {
+    type Error = Error;
+
+    fn try_from(item: TargetAddr<'_>) -> Result<Self> {
+        match item {
+            TargetAddr::Ip(addr) => Ok(addr),
+            TargetAddr::Domain(_, _) => Err(Error::InvalidTargetAddress(
+                "cannot convert a domain target to SocketAddr without DNS resolution",
+            )),
+        }
+    }
+}
