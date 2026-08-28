@@ -14,3 +14,11 @@ keywords      = ["tokio", "async", "proxy", "socks", "socks5"]
 
 [features]
 tor = []
+
+[[example]]
+name              = "socket"
+required-features = ["tor"]
+
+[[example]]
+name              = "tor"
+required-features = ["tor"]
