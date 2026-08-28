@@ -237,3 +237,86 @@ impl<'a> IntoTargetAddr<'a> for TargetAddr<'a> {
         Ok(self)
     }
 }
+
+impl<'a> IntoTargetAddr<'a> for (&'a str, u16) {
+    fn into_target_addr(self) -> Result<TargetAddr<'a>> {
+        // Try IP address first
+        if let Ok(addr) = self.0.parse::<IpAddr>() {
+            return (addr, self.1).into_target_addr();
+        }
+
+        // Treat as domain name
+        if self.0.len() > 255 {
+            return Err(Error::InvalidTargetAddress("overlong domain"));
+        }
+        // TODO: Should we validate the domain format here?
+
+        Ok(TargetAddr::Domain(self.0.into(), self.1))
+    }
+}
+
+impl<'a> IntoTargetAddr<'a> for &'a str {
+    fn into_target_addr(self) -> Result<TargetAddr<'a>> {
+        // Try IP address first
+        if let Ok(addr) = self.parse::<SocketAddr>() {
+            return addr.into_target_addr();
+        }
+
+        // Unbracketed IPv6 host:port (e.g. `::1:80`) is not supported; use `[::1]:80`.
+        let mut parts_iter = self.rsplitn(2, ':');
+        let port: u16 = parts_iter
+            .next()
+            .and_then(|port_str| port_str.parse().ok())
+            .ok_or(Error::InvalidTargetAddress("invalid address format"))?;
+        let domain = parts_iter
+            .next()
+            .ok_or(Error::InvalidTargetAddress("invalid address format"))?;
+        if domain.len() > 255 {
+            return Err(Error::InvalidTargetAddress("overlong domain"));
+        }
+        Ok(TargetAddr::Domain(domain.into(), port))
+    }
+}
+
+impl IntoTargetAddr<'static> for String {
+    fn into_target_addr(mut self) -> Result<TargetAddr<'static>> {
+        // Try IP address first
+        if let Ok(addr) = self.parse::<SocketAddr>() {
+            return addr.into_target_addr();
+        }
+
+        let mut parts_iter = self.rsplitn(2, ':');
+        let port: u16 = parts_iter
+            .next()
+            .and_then(|port_str| port_str.parse().ok())
+            .ok_or(Error::InvalidTargetAddress("invalid address format"))?;
+        let domain_len = parts_iter
+            .next()
+            .ok_or(Error::InvalidTargetAddress("invalid address format"))?
+            .len();
+        if domain_len > 255 {
+            return Err(Error::InvalidTargetAddress("overlong domain"));
+        }
+        self.truncate(domain_len);
+        Ok(TargetAddr::Domain(self.into(), port))
+    }
+}
+
+impl IntoTargetAddr<'static> for (String, u16) {
+    fn into_target_addr(self) -> Result<TargetAddr<'static>> {
+        let addr = (self.0.as_str(), self.1).into_target_addr()?;
+        if let TargetAddr::Ip(addr) = addr {
+            Ok(TargetAddr::Ip(addr))
+        } else {
+            Ok(TargetAddr::Domain(self.0.into(), self.1))
+        }
+    }
+}
+
+impl<'a, T> IntoTargetAddr<'a> for &'a T
+where T: IntoTargetAddr<'a> + Copy
+{
+    fn into_target_addr(self) -> Result<TargetAddr<'a>> {
+        (*self).into_target_addr()
+    }
+}
