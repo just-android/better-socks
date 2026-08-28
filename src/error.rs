@@ -23,3 +23,30 @@ pub enum Error {
     /// Unknown auth method
     #[error("Unknown auth method")]
     UnknownAuthMethod,
+    /// General SOCKS server failure
+    #[error("General SOCKS server failure")]
+    GeneralSocksServerFailure,
+    /// Connection not allowed by ruleset
+    #[error("Connection not allowed by ruleset")]
+    ConnectionNotAllowedByRuleset,
+    /// Network unreachable
+    #[error("Network unreachable")]
+    NetworkUnreachable,
+    /// Host unreachable
+    #[error("Host unreachable")]
+    HostUnreachable,
+    /// Connection refused
+    #[error("Connection refused")]
+    ConnectionRefused,
+    /// TTL expired
+    #[error("TTL expired")]
+    TtlExpired,
+    /// Command not supported
+    #[error("Command not supported")]
+    CommandNotSupported,
+    /// Address type not supported
+    #[error("Address type not supported")]
+    AddressTypeNotSupported,
+    /// Unknown error
+    #[error("Unknown error")]
+    UnknownError,
