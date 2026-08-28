@@ -1,0 +1,9 @@
+# Version from git tags, not crates.io. Flip these when you are ready to
+# `cargo publish`: git_only = false, publish = true, semver_check = true.
+[workspace]
+git_only = true
+publish = false
+release_always = false
+semver_check = false
+git_tag_name = "v{{ version }}"
+pr_labels = ["release"]
