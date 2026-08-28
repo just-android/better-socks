@@ -92,3 +92,55 @@ impl<T: ToProxyAddrs + ?Sized> ToProxyAddrs for &T {
         (**self).to_proxy_addrs()
     }
 }
+
+enum ProxyAddrsInner {
+    Iter(vec::IntoIter<SocketAddr>),
+    Lookup(Pin<Box<dyn Future<Output = io::Result<Vec<SocketAddr>>> + Send>>),
+    Done,
+}
+
+/// Stream of resolved proxy server addresses.
+pub struct ProxyAddrsStream {
+    inner: ProxyAddrsInner,
+}
+
+impl ProxyAddrsStream {
+    fn from_addrs(addrs: Vec<SocketAddr>) -> Self {
+        Self {
+            inner: ProxyAddrsInner::Iter(addrs.into_iter()),
+        }
+    }
+
+    fn lookup<F>(fut: F) -> Self
+    where
+        F: Future<Output = io::Result<Vec<SocketAddr>>> + Send + 'static,
+    {
+        Self {
+            inner: ProxyAddrsInner::Lookup(Box::pin(fut)),
+        }
+    }
+}
+
+impl Stream for ProxyAddrsStream {
+    type Item = Result<SocketAddr>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        loop {
+            match &mut this.inner {
+                ProxyAddrsInner::Iter(iter) => return Poll::Ready(iter.next().map(Ok)),
+                ProxyAddrsInner::Lookup(fut) => match fut.as_mut().poll(cx) {
+                    Poll::Ready(Ok(addrs)) => {
+                        this.inner = ProxyAddrsInner::Iter(addrs.into_iter());
+                    },
+                    Poll::Ready(Err(e)) => {
+                        this.inner = ProxyAddrsInner::Done;
+                        return Poll::Ready(Some(Err(e.into())));
+                    },
+                    Poll::Pending => return Poll::Pending,
+                },
+                ProxyAddrsInner::Done => return Poll::Ready(None),
+            }
+        }
+    }
+}
