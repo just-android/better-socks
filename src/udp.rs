@@ -100,3 +100,62 @@ impl Socks5UdpFramed {
         self.framed.get_ref().local_addr()
     }
 }
+
+impl Stream for Socks5UdpFramed {
+    type Item = StdResult<(<Socks5UdpCodec as Decoder>::Item, SocketAddr), <Socks5UdpCodec as Decoder>::Error>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.project();
+        if let Poll::Ready(d) = this.framed.poll_next(cx) {
+            return Poll::Ready(d);
+        }
+
+        let mut buf = [0u8; 512];
+        let mut buf = ReadBuf::new(&mut buf[..]);
+        match this.stream.poll_read(cx, &mut buf) {
+            Poll::Ready(Err(e)) => {
+                return Poll::Ready(Some(Err(Error::Io(e))));
+            },
+            Poll::Ready(Ok(())) => {
+                // EOF on the TCP control connection means the UDP association is gone.
+                if buf.filled().is_empty() {
+                    return Poll::Ready(None);
+                }
+                // Unexpected control-channel data is ignored; keep waiting for UDP.
+            },
+            Poll::Pending => {},
+        }
+
+        Poll::Pending
+    }
+}
+
+impl Sink<(Bytes, TargetAddr<'static>)> for Socks5UdpFramed {
+    type Error = <Socks5UdpCodec as Encoder<(Bytes, TargetAddr<'static>)>>::Error;
+
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<StdResult<(), Self::Error>> {
+        self.project().framed.poll_ready(cx)
+    }
+
+    fn start_send(self: Pin<&mut Self>, item: (Bytes, TargetAddr<'static>)) -> StdResult<(), Self::Error> {
+        let send_addr = *self.socks_addr();
+        self.project().framed.start_send((item, send_addr))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<StdResult<(), Self::Error>> {
+        self.project().framed.poll_flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<StdResult<(), Self::Error>> {
+        self.project().framed.poll_close(cx)
+    }
+}
+
+fn relay_socket_addr(addr: TargetAddr<'_>) -> Result<SocketAddr> {
+    match addr {
+        TargetAddr::Ip(addr) => Ok(addr),
+        TargetAddr::Domain(_, _) => Err(Error::InvalidTargetAddress(
+            "UDP ASSOCIATE bind address must be an IP address",
+        )),
+    }
+}
