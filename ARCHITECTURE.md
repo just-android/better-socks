@@ -334,3 +334,38 @@ flowchart LR
 
 Inner `Socks5Stream` is `AsyncRead + AsyncWrite`, so it is a valid socket for
 the next hop. Tor Unix sockets use the same `*_with_socket` path.
+
+# Errors
+
+```mermaid
+flowchart TB
+    subgraph local ["client-side"]
+        io[Io]
+        inv[InvalidTargetAddress]
+        iae[InvalidAuthValues]
+        unreach[ProxyServerUnreachable]
+        irv[InvalidResponseVersion]
+        irb[InvalidReservedByte]
+        uat[UnknownAddressType]
+        frag[FragmentationNotSupported]
+        ar[AuthorizationRequired]
+    end
+
+    subgraph auth_e ["auth"]
+        na[NoAcceptableAuthMethods]
+        ua[UnknownAuthMethod]
+        paf[PasswordAuthFailure]
+    end
+
+    subgraph socks ["reply REP"]
+        g[GeneralSocksServerFailure]
+        r[ConnectionNotAllowedByRuleset]
+        n[NetworkUnreachable]
+        h[HostUnreachable]
+        c[ConnectionRefused]
+        t[TtlExpired]
+        cmd[CommandNotSupported]
+        at[AddressTypeNotSupported]
+        unk[UnknownError]
+    end
+```
