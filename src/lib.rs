@@ -486,3 +486,19 @@ mod tests {
         res.set_port(16u16);
         assert_eq!(port, res.port());
     }
+
+    #[test]
+    fn proxy_addrs_stream_invalid_host_does_not_panic_on_repoll() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let mut stream = "256.256.256.256:80".to_proxy_addrs();
+            let first = stream.next().await;
+            assert!(first.unwrap().is_err());
+            assert!(stream.next().await.is_none());
+            assert!(stream.next().await.is_none());
+        });
+    }
+}
