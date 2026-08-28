@@ -340,3 +340,41 @@ enum Authentication<'a> {
 mod error;
 pub mod tcp;
 pub mod udp;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_executor::block_on;
+    use futures_util::StreamExt;
+
+    fn to_proxy_addrs<T: ToProxyAddrs>(t: T) -> Result<Vec<SocketAddr>> {
+        Ok(block_on(t.to_proxy_addrs().map(Result::unwrap).collect()))
+    }
+
+    #[test]
+    fn converts_socket_addr_to_proxy_addrs() -> Result<()> {
+        let addr = SocketAddr::from(([1, 1, 1, 1], 443));
+        let res = to_proxy_addrs(addr)?;
+        assert_eq!(&res[..], &[addr]);
+        Ok(())
+    }
+
+    #[test]
+    fn converts_socket_addr_ref_to_proxy_addrs() -> Result<()> {
+        let addr = SocketAddr::from(([1, 1, 1, 1], 443));
+        #[allow(clippy::needless_borrows_for_generic_args)]
+        let res = to_proxy_addrs(&addr)?;
+        assert_eq!(&res[..], &[addr]);
+        Ok(())
+    }
+
+    #[test]
+    fn converts_socket_addrs_to_proxy_addrs() -> Result<()> {
+        let addrs = [
+            SocketAddr::from(([1, 1, 1, 1], 443)),
+            SocketAddr::from(([8, 8, 8, 8], 53)),
+        ];
+        let res = to_proxy_addrs(&addrs[..])?;
+        assert_eq!(&res[..], &addrs);
+        Ok(())
+    }
