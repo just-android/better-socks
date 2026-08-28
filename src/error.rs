@@ -14,3 +14,12 @@ pub enum Error {
     /// Proxy server unreachable.
     #[error("Proxy server unreachable")]
     ProxyServerUnreachable,
+    /// Proxy server returns an invalid version number.
+    #[error("Invalid response version")]
+    InvalidResponseVersion,
+    /// No acceptable auth methods
+    #[error("No acceptable auth methods")]
+    NoAcceptableAuthMethods,
+    /// Unknown auth method
+    #[error("Unknown auth method")]
+    UnknownAuthMethod,
