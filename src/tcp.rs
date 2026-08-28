@@ -607,3 +607,76 @@ where S: Stream<Item = Result<SocketAddr>> + Unpin
         Ok(target)
     }
 }
+
+/// A SOCKS5 BIND client.
+///
+/// Once you get an instance of `Socks5Listener`, you should send the
+/// `bind_addr` to the remote process via the primary connection. Then, call the
+/// `accept` function and wait for the other end connecting to the rendezvous
+/// address.
+pub struct Socks5Listener<S> {
+    inner: Socks5Stream<S>,
+}
+
+impl Socks5Listener<TcpStream> {
+    /// Initiates a BIND request to the specified proxy.
+    ///
+    /// The proxy will filter incoming connections based on the value of
+    /// `target`.
+    ///
+    /// # Error
+    ///
+    /// It propagates the error that occurs in the conversion from `T` to
+    /// `TargetAddr`.
+    pub async fn bind<'t, P, T>(proxy: P, target: T) -> Result<Socks5Listener<TcpStream>>
+    where
+        P: ToProxyAddrs,
+        T: IntoTargetAddr<'t>,
+    {
+        Self::bind_with_auth(Authentication::None, proxy, target).await
+    }
+
+    /// Initiates a BIND request to the specified proxy using given username
+    /// and password.
+    ///
+    /// The proxy will filter incoming connections based on the value of
+    /// `target`.
+    ///
+    /// # Error
+    ///
+    /// It propagates the error that occurs in the conversion from `T` to
+    /// `TargetAddr`.
+    pub async fn bind_with_password<'a, 't, P, T>(
+        proxy: P,
+        target: T,
+        username: &'a str,
+        password: &'a str,
+    ) -> Result<Socks5Listener<TcpStream>>
+    where
+        P: ToProxyAddrs,
+        T: IntoTargetAddr<'t>,
+    {
+        Self::bind_with_auth(Authentication::Password { username, password }, proxy, target).await
+    }
+
+    async fn bind_with_auth<'t, P, T>(
+        auth: Authentication<'_>,
+        proxy: P,
+        target: T,
+    ) -> Result<Socks5Listener<TcpStream>>
+    where
+        P: ToProxyAddrs,
+        T: IntoTargetAddr<'t>,
+    {
+        let socket = SocksConnector::new(
+            auth,
+            Command::Bind,
+            proxy.to_proxy_addrs().fuse(),
+            target.into_target_addr()?,
+        )
+        .execute()
+        .await?;
+
+        Ok(Socks5Listener { inner: socket })
+    }
+}
