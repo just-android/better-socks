@@ -768,3 +768,27 @@ where S: AsyncRead + AsyncWrite + Unpin
         })
     }
 }
+
+impl<T> AsyncRead for Socks5Stream<T>
+where T: AsyncRead + Unpin
+{
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+        AsyncRead::poll_read(Pin::new(&mut self.socket), cx, buf)
+    }
+}
+
+impl<T> AsyncWrite for Socks5Stream<T>
+where T: AsyncWrite + Unpin
+{
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+        AsyncWrite::poll_write(Pin::new(&mut self.socket), cx, buf)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        AsyncWrite::poll_flush(Pin::new(&mut self.socket), cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        AsyncWrite::poll_shutdown(Pin::new(&mut self.socket), cx)
+    }
+}
