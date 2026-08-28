@@ -38,3 +38,30 @@ pub trait ToProxyAddrs {
 
     fn to_proxy_addrs(&self) -> Self::Output;
 }
+
+macro_rules! trivial_impl_to_proxy_addrs {
+    ($t: ty) => {
+        impl ToProxyAddrs for $t {
+            type Output = Once<future::Ready<Result<SocketAddr>>>;
+
+            fn to_proxy_addrs(&self) -> Self::Output {
+                stream::once(future::ready(Ok(SocketAddr::from(*self))))
+            }
+        }
+    };
+}
+
+trivial_impl_to_proxy_addrs!(SocketAddr);
+trivial_impl_to_proxy_addrs!((IpAddr, u16));
+trivial_impl_to_proxy_addrs!((Ipv4Addr, u16));
+trivial_impl_to_proxy_addrs!((Ipv6Addr, u16));
+trivial_impl_to_proxy_addrs!(SocketAddrV4);
+trivial_impl_to_proxy_addrs!(SocketAddrV6);
+
+impl ToProxyAddrs for &[SocketAddr] {
+    type Output = ProxyAddrsStream;
+
+    fn to_proxy_addrs(&self) -> Self::Output {
+        ProxyAddrsStream::from_addrs(self.to_vec())
+    }
+}
