@@ -45,3 +45,58 @@ pub struct Socks5UdpMessage {
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub struct Socks5UdpCodec;
+
+impl Socks5UdpFramed {
+    pub async fn connect<P, T>(proxy: P, bind_addr: Option<T>) -> Result<Self>
+    where
+        P: ToProxyAddrs,
+        T: ToSocketAddrs,
+    {
+        let socket = match bind_addr {
+            None => UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).await?,
+            Some(addr) => UdpSocket::bind(addr).await?,
+        };
+        let local = socket.local_addr()?;
+        let stream = Socks5Stream::associate(proxy, local).await?;
+        let framed = UdpFramed::new(socket, Socks5UdpCodec::new());
+        let socks_addr = relay_socket_addr(stream.target_addr())?;
+        Ok(Self {
+            framed,
+            stream,
+            socks_addr,
+        })
+    }
+
+    pub async fn connect_with_password<'a, P, T>(
+        proxy: P,
+        bind_addr: Option<T>,
+        username: &'a str,
+        password: &'a str,
+    ) -> Result<Self>
+    where
+        P: ToProxyAddrs,
+        T: ToSocketAddrs,
+    {
+        let socket = match bind_addr {
+            None => UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).await?,
+            Some(addr) => UdpSocket::bind(addr).await?,
+        };
+        let local = socket.local_addr()?;
+        let stream = Socks5Stream::associate_with_password(proxy, local, username, password).await?;
+        let framed = UdpFramed::new(socket, Socks5UdpCodec::new());
+        let socks_addr = relay_socket_addr(stream.target_addr())?;
+        Ok(Self {
+            framed,
+            stream,
+            socks_addr,
+        })
+    }
+
+    pub fn socks_addr(&self) -> &SocketAddr {
+        &self.socks_addr
+    }
+
+    pub fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.framed.get_ref().local_addr()
+    }
+}
