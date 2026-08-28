@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -x
 
-dir="$(dirname "$(which "$0")")"
+dir="$(cd "$(dirname "$0")" && pwd)"
 SOCK="/tmp/proxy.s"
 PROXY_HOST="127.0.0.1:41080"
 
@@ -18,7 +18,12 @@ fi
 socat UNIX-LISTEN:${SOCK},reuseaddr,fork TCP:${PROXY_HOST} &
 
 for test in ${list}; do
-    3proxy ${dir}/${test}.cfg
+    cfg="${dir}/${test}.cfg"
+    if test ! -f "${cfg}"; then
+        echo "missing 3proxy config: ${cfg}" >&2
+        exit 1
+    fi
+    3proxy "${cfg}"
     sleep 1
     cargo test --test ${test} -- --test-threads 1
     test_exit_code=$?
