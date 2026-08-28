@@ -178,3 +178,153 @@ impl Socks5Stream<TcpStream> {
         Ok(sock)
     }
 }
+
+impl<S> Socks5Stream<S>
+where S: AsyncRead + AsyncWrite + Unpin
+{
+    /// Connects to a target server through a SOCKS5 proxy given a socket to it.
+    ///
+    /// # Error
+    ///
+    /// It propagates the error that occurs in the conversion from `T` to
+    /// `TargetAddr`.
+    pub async fn connect_with_socket<'t, T>(socket: S, target: T) -> Result<Socks5Stream<S>>
+    where T: IntoTargetAddr<'t> {
+        Self::execute_command_with_socket(socket, target, Authentication::None, Command::Connect).await
+    }
+
+    /// Connects to a target server through a SOCKS5 proxy using given username,
+    /// password and a socket to the proxy
+    ///
+    /// # Error
+    ///
+    /// It propagates the error that occurs in the conversion from `T` to
+    /// `TargetAddr`.
+    pub async fn connect_with_password_and_socket<'a, 't, T>(
+        socket: S,
+        target: T,
+        username: &'a str,
+        password: &'a str,
+    ) -> Result<Socks5Stream<S>>
+    where
+        T: IntoTargetAddr<'t>,
+    {
+        Self::execute_command_with_socket(
+            socket,
+            target,
+            Authentication::Password { username, password },
+            Command::Connect,
+        )
+        .await
+    }
+
+    /// Associate to a target server through a SOCKS5 proxy given the proxy
+    /// address.
+    ///
+    /// # Error
+    ///
+    /// It propagates the error that occurs in the conversion from `T` to
+    /// `TargetAddr`.
+    pub async fn associate_with_socket<'t, T>(socket: S, local: T) -> Result<Socks5Stream<S>>
+    where T: IntoTargetAddr<'t> {
+        Self::execute_command_with_socket(socket, local, Authentication::None, Command::Associate).await
+    }
+
+    /// Associate to a target server through a SOCKS5 proxy using given
+    /// username, password and the address of the proxy.
+    ///
+    /// # Error
+    ///
+    /// It propagates the error that occurs in the conversion from `T` to
+    /// `TargetAddr`.
+    pub async fn associate_with_password_and_socket<'a, 't, T>(
+        socket: S,
+        local: T,
+        username: &'a str,
+        password: &'a str,
+    ) -> Result<Socks5Stream<S>>
+    where
+        T: IntoTargetAddr<'t>,
+    {
+        Self::execute_command_with_socket(
+            socket,
+            local,
+            Authentication::Password { username, password },
+            Command::Associate,
+        )
+        .await
+    }
+
+    fn validate_auth(auth: &Authentication<'_>) -> Result<()> {
+        match auth {
+            Authentication::Password { username, password } => {
+                let username_len = username.len();
+                if username_len > 255 {
+                    Err(Error::InvalidAuthValues("username length should between 0 to 255"))?
+                }
+                let password_len = password.len();
+                if password_len > 255 {
+                    Err(Error::InvalidAuthValues("password length should between 0 to 255"))?
+                }
+            },
+            Authentication::None => {},
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "tor")]
+    /// Resolve the domain name to an ip using special Tor Resolve command, by
+    /// connecting to a Tor compatible proxy given a socket to it.
+    pub async fn tor_resolve_with_socket<'t, T>(socket: S, target: T) -> Result<TargetAddr<'static>>
+    where T: IntoTargetAddr<'t> {
+        let sock = Self::execute_command_with_socket(socket, target, Authentication::None, Command::TorResolve).await?;
+
+        Ok(sock.target_addr().to_owned())
+    }
+
+    #[cfg(feature = "tor")]
+    /// Perform a reverse DNS query on the given ip using special Tor Resolve
+    /// PTR command, by connecting to a Tor compatible proxy given a socket
+    /// to it.
+    pub async fn tor_resolve_ptr_with_socket<'t, T>(socket: S, target: T) -> Result<TargetAddr<'static>>
+    where T: IntoTargetAddr<'t> {
+        let sock =
+            Self::execute_command_with_socket(socket, target, Authentication::None, Command::TorResolvePtr).await?;
+
+        Ok(sock.target_addr().to_owned())
+    }
+
+    async fn execute_command_with_socket<'a, 't, T>(
+        socket: S,
+        target: T,
+        auth: Authentication<'a>,
+        command: Command,
+    ) -> Result<Socks5Stream<S>>
+    where
+        T: IntoTargetAddr<'t>,
+    {
+        Self::validate_auth(&auth)?;
+
+        let sock = SocksConnector::new(auth, command, stream::empty().fuse(), target.into_target_addr()?)
+            .execute_with_socket(socket)
+            .await?;
+
+        Ok(sock)
+    }
+
+    /// Consumes the `Socks5Stream`, returning the inner socket.
+    pub fn into_inner(self) -> S {
+        self.socket
+    }
+
+    /// Returns the target address that the proxy server connects to.
+    pub fn target_addr(&self) -> TargetAddr<'_> {
+        match &self.target {
+            TargetAddr::Ip(addr) => TargetAddr::Ip(*addr),
+            TargetAddr::Domain(domain, port) => {
+                let domain: &str = domain.borrow();
+                TargetAddr::Domain(domain.into(), *port)
+            },
+        }
+    }
+}
