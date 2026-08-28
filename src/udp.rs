@@ -259,3 +259,52 @@ impl Decoder for Socks5UdpCodec {
         Ok(Some(msg))
     }
 }
+
+// +----+------+------+----------+----------+----------+
+// |RSV | FRAG | ATYP | DST.ADDR | DST.PORT |   DATA   |
+// +----+------+------+----------+----------+----------+
+// | 2  |  1   |  1   | Variable |    2     | Variable |
+// +----+------+------+----------+----------+----------+
+impl Encoder<(Bytes, TargetAddr<'static>)> for Socks5UdpCodec {
+    type Error = Error;
+
+    // TODO: consider fragment
+    fn encode(&mut self, (data, addr): (Bytes, TargetAddr<'static>), buf: &mut BytesMut) -> StdResult<(), Self::Error> {
+        let mut header = BytesMut::new();
+        header.resize(4, 0u8);
+
+        let mut addr_port = BytesMut::new();
+        match addr {
+            TargetAddr::Ip(SocketAddr::V4(addr)) => {
+                addr_port.reserve(6);
+                header[3] = 0x01;
+                addr_port.put_slice(&addr.ip().octets());
+                addr_port.put_slice(&addr.port().to_be_bytes());
+            },
+            TargetAddr::Ip(SocketAddr::V6(addr)) => {
+                addr_port.reserve(18);
+                header[3] = 0x04;
+                addr_port.put_slice(&addr.ip().octets());
+                addr_port.put_slice(&addr.port().to_be_bytes());
+            },
+            TargetAddr::Domain(domain, port) => {
+                let domain_len = domain.len();
+                if domain_len > 255 {
+                    return Err(Error::InvalidTargetAddress("overlong domain"));
+                }
+                addr_port.reserve(1 + domain_len + 2);
+                header[3] = 0x03;
+                addr_port.put_u8(domain_len as u8);
+                addr_port.put_slice(domain.as_bytes());
+                addr_port.put_slice(&port.to_be_bytes());
+            },
+        }
+        header.extend(addr_port);
+
+        buf.clear();
+        buf.extend(header);
+        buf.extend(data);
+
+        Ok(())
+    }
+}
