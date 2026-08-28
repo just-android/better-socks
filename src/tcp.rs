@@ -409,3 +409,46 @@ where S: Stream<Item = Result<SocketAddr>> + Unpin
 
         Ok(Socks5Stream { socket, target })
     }
+
+    fn prepare_send_method_selection(&mut self) {
+        self.ptr = 0;
+        self.buf[0] = 0x05;
+        match self.auth {
+            Authentication::None => {
+                self.buf[1..3].copy_from_slice(&[1, 0x00]);
+                self.len = 3;
+            },
+            Authentication::Password { .. } => {
+                self.buf[1..4].copy_from_slice(&[2, 0x00, 0x02]);
+                self.len = 4;
+            },
+        }
+    }
+
+    fn prepare_recv_method_selection(&mut self) {
+        self.ptr = 0;
+        self.len = 2;
+    }
+
+    fn prepare_send_password_auth(&mut self) {
+        if let Authentication::Password { username, password } = self.auth {
+            self.ptr = 0;
+            self.buf[0] = 0x01;
+            let username_bytes = username.as_bytes();
+            let username_len = username_bytes.len();
+            self.buf[1] = username_len as u8;
+            self.buf[2..(2 + username_len)].copy_from_slice(username_bytes);
+            let password_bytes = password.as_bytes();
+            let password_len = password_bytes.len();
+            self.len = 3 + username_len + password_len;
+            self.buf[2 + username_len] = password_len as u8;
+            self.buf[(3 + username_len)..self.len].copy_from_slice(password_bytes);
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn prepare_recv_password_auth(&mut self) {
+        self.ptr = 0;
+        self.len = 2;
+    }
