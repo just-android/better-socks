@@ -1,0 +1,13 @@
+[package]
+name          = "better-socks"
+description   = "Asynchronous SOCKS proxy support for Rust"
+version       = "0.1.0"
+edition       = "2024"
+rust-version  = "1.85"
+license       = "Apache-2.0"
+readme        = "README.md"
+homepage      = "https://github.com/just-android/better-socks"
+repository    = "https://github.com/just-android/better-socks"
+documentation = "https://docs.rs/better-socks"
+categories    = ["asynchronous", "network-programming"]
+keywords      = ["tokio", "async", "proxy", "socks", "socks5"]
