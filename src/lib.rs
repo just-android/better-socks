@@ -336,3 +336,7 @@ enum Authentication<'a> {
     Password { username: &'a str, password: &'a str },
     None,
 }
+
+mod error;
+pub mod tcp;
+pub mod udp;
