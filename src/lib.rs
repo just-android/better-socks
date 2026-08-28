@@ -195,3 +195,16 @@ impl TargetAddr<'_> {
         }
     }
 }
+
+impl ToSocketAddrs for TargetAddr<'_> {
+    type Iter = Either<std::option::IntoIter<SocketAddr>, std::vec::IntoIter<SocketAddr>>;
+
+    /// Resolves domain names with the local resolver. This bypasses SOCKS
+    /// remote DNS and can leak queries; prefer passing the domain to the proxy.
+    fn to_socket_addrs(&self) -> io::Result<Self::Iter> {
+        Ok(match self {
+            TargetAddr::Ip(addr) => Either::Left(addr.to_socket_addrs()?),
+            TargetAddr::Domain(domain, port) => Either::Right((&**domain, *port).to_socket_addrs()?),
+        })
+    }
+}
