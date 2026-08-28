@@ -355,3 +355,55 @@ mod tests {
         assert_eq!(msg.dst_addr, addr);
         assert_eq!(&msg.data[..], b"hi");
     }
+
+    #[test]
+    fn empty_payload_is_valid() {
+        let addr = TargetAddr::Ip(SocketAddr::from((Ipv4Addr::new(8, 8, 8, 8), 53)));
+        let msg = roundtrip(addr.clone(), b"");
+        assert_eq!(msg.dst_addr, addr);
+        assert!(msg.data.is_empty());
+    }
+
+    #[test]
+    fn short_domain_does_not_panic() {
+        // Regression: the old decoder sliced `buf[5..(len - 2)]`, which panics when
+        // `len < 2` and corrupts longer domain names.
+        let addr = TargetAddr::Domain("ab".into(), 443);
+        let msg = roundtrip(addr.clone(), b"x");
+        assert_eq!(msg.dst_addr, addr);
+    }
+
+    #[test]
+    fn truncated_datagram_is_error() {
+        let mut codec = Socks5UdpCodec::new();
+        let mut buf = BytesMut::from(&b"\x00\x00\x00"[..]);
+        assert!(codec.decode(&mut buf).is_err());
+
+        let mut buf = BytesMut::from(&b"\x00\x00\x00\x01\x01\x02\x03\x04\x00"[..]);
+        assert!(codec.decode(&mut buf).is_err());
+    }
+
+    #[test]
+    fn empty_buffer_is_incomplete() {
+        let mut codec = Socks5UdpCodec::new();
+        let mut buf = BytesMut::new();
+        assert!(codec.decode(&mut buf).unwrap().is_none());
+    }
+
+    #[test]
+    fn nonzero_frag_is_error() {
+        let mut codec = Socks5UdpCodec::new();
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(&[0, 0, 1, 1, 1, 2, 3, 4, 0, 53, b'x']);
+        assert!(matches!(codec.decode(&mut buf), Err(Error::FragmentationNotSupported)));
+    }
+
+    #[test]
+    fn overlong_domain_encode_fails() {
+        let mut codec = Socks5UdpCodec::new();
+        let mut buf = BytesMut::new();
+        let domain = "a".repeat(256);
+        let addr = TargetAddr::Domain(domain.into(), 80);
+        assert!(codec.encode((Bytes::new(), addr), &mut buf).is_err());
+    }
+}
