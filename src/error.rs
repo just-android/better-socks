@@ -50,3 +50,12 @@ pub enum Error {
     /// Unknown error
     #[error("Unknown error")]
     UnknownError,
+    /// SOCKS5 UDP fragmentation is not implemented.
+    #[error("SOCKS5 UDP fragmentation is not supported")]
+    FragmentationNotSupported,
+    /// Invalid reserved byte
+    #[error("Invalid reserved byte")]
+    InvalidReservedByte,
+    /// Unknown address type
+    #[error("Unknown address type")]
+    UnknownAddressType,
