@@ -329,3 +329,10 @@ impl fmt::Display for TargetAddr<'_> {
         }
     }
 }
+
+/// Authentication methods
+#[derive(Debug)]
+enum Authentication<'a> {
+    Password { username: &'a str, password: &'a str },
+    None,
+}
