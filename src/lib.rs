@@ -170,3 +170,28 @@ impl TryFrom<TargetAddr<'_>> for SocketAddr {
         }
     }
 }
+
+impl TargetAddr<'_> {
+    /// Creates owned `TargetAddr` by cloning. It is usually used to eliminate
+    /// the lifetime bound.
+    pub fn to_owned(&self) -> TargetAddr<'static> {
+        match self {
+            TargetAddr::Ip(addr) => TargetAddr::Ip(*addr),
+            TargetAddr::Domain(domain, port) => TargetAddr::Domain(Cow::Owned(domain.clone().into_owned()), *port),
+        }
+    }
+
+    pub fn port(&self) -> u16 {
+        match self {
+            TargetAddr::Ip(addr) => addr.port(),
+            TargetAddr::Domain(_, port) => *port,
+        }
+    }
+
+    pub fn set_port(&mut self, port: u16) {
+        match self {
+            TargetAddr::Ip(addr) => addr.set_port(port),
+            TargetAddr::Domain(_, p) => *p = port,
+        }
+    }
+}
