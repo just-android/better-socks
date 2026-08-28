@@ -320,3 +320,12 @@ where T: IntoTargetAddr<'a> + Copy
         (*self).into_target_addr()
     }
 }
+
+impl fmt::Display for TargetAddr<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Ip(addr) => write!(f, "{addr}"),
+            Self::Domain(domain, port) => write!(f, "{domain}:{port}"),
+        }
+    }
+}
