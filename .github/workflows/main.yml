@@ -55,3 +55,6 @@ jobs:
           ln -s Makefile.Linux "${RUNNER_TEMP}/3proxy-0.8.13/Makefile"
           make -C "${RUNNER_TEMP}/3proxy-0.8.13" -j"$(nproc)"
           echo "${RUNNER_TEMP}/3proxy-0.8.13/src" >> "$GITHUB_PATH"
+
+      - name: Integration tests
+        run: bash tests/integration_tests.sh
