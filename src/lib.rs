@@ -378,3 +378,86 @@ mod tests {
         assert_eq!(&res[..], &addrs);
         Ok(())
     }
+
+    fn into_target_addr<'a, T>(t: T) -> Result<TargetAddr<'a>>
+    where T: IntoTargetAddr<'a> {
+        t.into_target_addr()
+    }
+
+    #[test]
+    fn converts_socket_addr_to_target_addr() -> Result<()> {
+        let addr = SocketAddr::from(([1, 1, 1, 1], 443));
+        let res = into_target_addr(addr)?;
+        assert_eq!(TargetAddr::Ip(addr), res);
+        let addr2 = SocketAddr::try_from(res)?;
+        assert_eq!(addr, addr2);
+        Ok(())
+    }
+
+    #[test]
+    fn domain_target_does_not_convert_to_socket_addr() {
+        let res = into_target_addr("www.example.com:80").unwrap();
+        assert!(SocketAddr::try_from(res).is_err());
+    }
+
+    #[test]
+    fn converts_socket_addr_ref_to_target_addr() -> Result<()> {
+        let addr = SocketAddr::from(([1, 1, 1, 1], 443));
+        #[allow(clippy::needless_borrows_for_generic_args)]
+        let res = into_target_addr(&addr)?;
+        assert_eq!(TargetAddr::Ip(addr), res);
+        Ok(())
+    }
+
+    #[test]
+    fn converts_socket_addr_str_to_target_addr() -> Result<()> {
+        let addr = SocketAddr::from(([1, 1, 1, 1], 443));
+        let ip_str = format!("{}", addr);
+        let res = into_target_addr(ip_str.as_str())?;
+        assert_eq!(TargetAddr::Ip(addr), res);
+        Ok(())
+    }
+
+    #[test]
+    fn converts_ip_str_and_port_target_addr() -> Result<()> {
+        let addr = SocketAddr::from(([1, 1, 1, 1], 443));
+        let ip_str = format!("{}", addr.ip());
+        let res = into_target_addr((ip_str.as_str(), addr.port()))?;
+        assert_eq!(TargetAddr::Ip(addr), res);
+        Ok(())
+    }
+
+    #[test]
+    fn converts_domain_to_target_addr() -> Result<()> {
+        let domain = "www.example.com:80";
+        let res = into_target_addr(domain)?;
+        assert_eq!(TargetAddr::Domain(Cow::Borrowed("www.example.com"), 80), res);
+
+        let res = into_target_addr(domain.to_owned())?;
+        assert_eq!(TargetAddr::Domain(Cow::Owned("www.example.com".to_owned()), 80), res);
+        Ok(())
+    }
+
+    #[test]
+    fn converts_domain_and_port_to_target_addr() -> Result<()> {
+        let domain = "www.example.com";
+        let res = into_target_addr((domain, 80))?;
+        assert_eq!(TargetAddr::Domain(Cow::Borrowed("www.example.com"), 80), res);
+        Ok(())
+    }
+
+    #[test]
+    fn overlong_domain_to_target_addr_should_fail() {
+        let domain = format!("www.{:a<1$}.com:80", 'a', 300);
+        assert!(into_target_addr(domain.as_str()).is_err());
+        let domain = format!("www.{:a<1$}.com", 'a', 300);
+        assert!(into_target_addr((domain.as_str(), 80)).is_err());
+    }
+
+    #[test]
+    fn addr_with_invalid_port_to_target_addr_should_fail() {
+        let addr = "[ffff::1]:65536";
+        assert!(into_target_addr(addr).is_err());
+        let addr = "www.example.com:65536";
+        assert!(into_target_addr(addr).is_err());
+    }
